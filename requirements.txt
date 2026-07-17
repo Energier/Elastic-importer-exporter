@@ -1,0 +1,5 @@
+# Elasticsearch client for ES 6.8
+elasticsearch>=6,<7
+
+# Used directly in scripts (SSL warnings handling)
+urllib3<2
