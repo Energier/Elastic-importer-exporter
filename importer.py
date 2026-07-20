@@ -138,6 +138,14 @@ IMPORT_POST_VALIDATE_STRICT = get_env_bool(
     "IMPORT_POST_VALIDATE_STRICT",
     True,
 )
+IMPORT_POST_VALIDATE_RETRIES = get_env_int(
+    "IMPORT_POST_VALIDATE_RETRIES",
+    5,
+)
+IMPORT_POST_VALIDATE_DELAY_SECONDS = get_env_int(
+    "IMPORT_POST_VALIDATE_DELAY_SECONDS",
+    1,
+)
 
 if not os.path.isabs(IMPORT_INPUT_FILE):
     IMPORT_INPUT_FILE = os.path.join(
@@ -663,6 +671,54 @@ def get_destination_document_count(
         return None
 
 
+def refresh_destination_index(
+    es: Elasticsearch,
+    index_name: str,
+) -> None:
+    try:
+        call_es_with_retries(
+            "indices.refresh",
+            es.indices.refresh,
+            index=index_name,
+        )
+    except es_exceptions.NotFoundError:
+        # Dla bezpieczeństwa: jeśli indeks jeszcze nie istnieje,
+        # pozostawiamy decyzję dalszej walidacji count().
+        return
+
+
+def get_stable_destination_document_count(
+    es: Elasticsearch,
+    index_name: str,
+    expected_minimum: Optional[int] = None,
+) -> Optional[int]:
+    last_count: Optional[int] = None
+
+    for attempt in range(1, IMPORT_POST_VALIDATE_RETRIES + 1):
+        refresh_destination_index(
+            es=es,
+            index_name=index_name,
+        )
+
+        current_count = get_destination_document_count(
+            es=es,
+            index_name=index_name,
+        )
+        last_count = current_count
+
+        if (
+            expected_minimum is None
+            or current_count is None
+            or current_count >= expected_minimum
+        ):
+            return current_count
+
+        if attempt < IMPORT_POST_VALIDATE_RETRIES:
+            time.sleep(IMPORT_POST_VALIDATE_DELAY_SECONDS)
+
+    return last_count
+
+
 def validate_post_import_consistency(
     index_name: str,
     index_action: str,
@@ -996,7 +1052,7 @@ def import_single_index(
         else:
             before_count: Optional[int] = None
             if IMPORT_VALIDATE_AFTER_UPLOAD:
-                before_count = get_destination_document_count(
+                before_count = get_stable_destination_document_count(
                     es=es,
                     index_name=index_name,
                 )
@@ -1036,9 +1092,19 @@ def import_single_index(
                 result["aliases_applied"] = aliases_applied
 
             if IMPORT_VALIDATE_AFTER_UPLOAD:
-                after_count = get_destination_document_count(
+                expected_minimum = None
+                if index_action == "created":
+                    expected_minimum = documents_imported
+                elif (
+                    index_action == "kept"
+                    and before_count is not None
+                ):
+                    expected_minimum = before_count
+
+                after_count = get_stable_destination_document_count(
                     es=es,
                     index_name=index_name,
+                    expected_minimum=expected_minimum,
                 )
                 result["dest_count_after"] = (
                     after_count if after_count is not None else ""

@@ -78,6 +78,8 @@ Po imporcie może dodatkowo wykonać walidację na klastrze DEST:
 - zapisuje `dest_count_before` i `dest_count_after`,
 - dla nowo utworzonego indeksu sprawdza zgodność `DEST == documents_imported`,
 - dla istniejącego indeksu (`kept`) sprawdza, czy liczba dokumentów nie spadła,
+- przed odczytem count wykonuje `refresh` oraz krótkie retry, żeby
+  uniknąć fałszywych alarmów przez opóźnioną widoczność dokumentów,
 - zapisuje `post_validation_status` do raportu (`OK` / `WARNING` / `ERROR`).
 
 ## Dry Mode (tryb testowy)
@@ -125,6 +127,8 @@ Tryb testowy importera:
 - `IMPORT_VALIDATE_COUNTS`
 - `IMPORT_VALIDATE_AFTER_UPLOAD`
 - `IMPORT_POST_VALIDATE_STRICT`
+- `IMPORT_POST_VALIDATE_RETRIES`
+- `IMPORT_POST_VALIDATE_DELAY_SECONDS`
 
 ## Stabilność dla długich zadań
 
