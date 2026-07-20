@@ -644,18 +644,23 @@ def validate_index_files_consistency(
 def get_destination_document_count(
     es: Elasticsearch,
     index_name: str,
-) -> int:
-    response = call_es_with_retries(
-        "count(dest)",
-        es.count,
-        index=index_name,
-        body={
-            "query": {
-                "match_all": {}
-            }
-        },
-    )
-    return int(response.get("count", 0))
+) -> Optional[int]:
+    try:
+        response = call_es_with_retries(
+            "count(dest)",
+            es.count,
+            index=index_name,
+            body={
+                "query": {
+                    "match_all": {}
+                }
+            },
+        )
+        return int(response.get("count", 0))
+
+    except es_exceptions.NotFoundError:
+        # Brak indeksu na DEST przed importem jest poprawnym stanem.
+        return None
 
 
 def validate_post_import_consistency(
@@ -664,8 +669,21 @@ def validate_post_import_consistency(
     documents_imported: int,
     documents_failed: int,
     before_count: Optional[int],
-    after_count: int,
+    after_count: Optional[int],
 ) -> Dict[str, str]:
+    if after_count is None:
+        return {
+            "status": (
+                "ERROR"
+                if IMPORT_POST_VALIDATE_STRICT
+                else "WARNING"
+            ),
+            "message": (
+                "Po imporcie nie udało się odczytać liczby "
+                "dokumentów na DEST (indeks nie istnieje)."
+            ),
+        }
+
     if documents_failed > 0:
         return {
             "status": "WARNING",
@@ -982,7 +1000,9 @@ def import_single_index(
                     es=es,
                     index_name=index_name,
                 )
-                result["dest_count_before"] = before_count
+            result["dest_count_before"] = (
+                before_count if before_count is not None else ""
+            )
 
             index_action = ensure_destination_index(
                 es=es,
@@ -1020,7 +1040,9 @@ def import_single_index(
                     es=es,
                     index_name=index_name,
                 )
-                result["dest_count_after"] = after_count
+                result["dest_count_after"] = (
+                    after_count if after_count is not None else ""
+                )
 
                 post_validation = validate_post_import_consistency(
                     index_name=index_name,
