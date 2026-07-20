@@ -56,8 +56,14 @@ from elastic_env import (
 # KONFIGURACJA
 # ============================================================
 
+SCRIPT_DIRECTORY = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
 # Wczytanie konfiguracji z .env
-load_env_file()
+load_env_file(
+    os.path.join(SCRIPT_DIRECTORY, ".env")
+)
 configure_console_output_encoding()
 
 # Dane logowania do źródłowego Elasticsearch
@@ -77,6 +83,18 @@ OUTPUT_DIRECTORY = get_env_str(
     "OUTPUT_DIRECTORY",
     "elastic_export",
 )
+
+if not os.path.isabs(INPUT_FILE):
+    INPUT_FILE = os.path.join(
+        SCRIPT_DIRECTORY,
+        INPUT_FILE,
+    )
+
+if not os.path.isabs(OUTPUT_DIRECTORY):
+    OUTPUT_DIRECTORY = os.path.join(
+        SCRIPT_DIRECTORY,
+        OUTPUT_DIRECTORY,
+    )
 
 # Raport zbiorczy
 SUMMARY_FILE = get_env_str(

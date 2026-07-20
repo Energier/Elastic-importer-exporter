@@ -40,7 +40,13 @@ from elastic_env import (
 # KONFIGURACJA
 # ============================================================
 
-load_env_file()
+SCRIPT_DIRECTORY = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+load_env_file(
+    os.path.join(SCRIPT_DIRECTORY, ".env")
+)
 configure_console_output_encoding()
 
 DEST_ES_LINK = get_env_str(
@@ -132,6 +138,18 @@ IMPORT_POST_VALIDATE_STRICT = get_env_bool(
     "IMPORT_POST_VALIDATE_STRICT",
     True,
 )
+
+if not os.path.isabs(IMPORT_INPUT_FILE):
+    IMPORT_INPUT_FILE = os.path.join(
+        SCRIPT_DIRECTORY,
+        IMPORT_INPUT_FILE,
+    )
+
+if not os.path.isabs(OUTPUT_DIRECTORY):
+    OUTPUT_DIRECTORY = os.path.join(
+        SCRIPT_DIRECTORY,
+        OUTPUT_DIRECTORY,
+    )
 
 
 # ============================================================
@@ -1156,6 +1174,11 @@ def main() -> int:
 
         for number, index_name in enumerate(index_names, start=1):
             print(f"{number}. {index_name}")
+
+        os.makedirs(
+            OUTPUT_DIRECTORY,
+            exist_ok=True,
+        )
 
         es = create_elasticsearch_client()
 
